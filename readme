@@ -1,0 +1,27 @@
+# IoT Device Simulator 🚀
+
+Simulates multiple IoT devices using Python + MQTT to mimic real-world behavior. Each device publishes sensor data and listens for command topics.
+
+## 🔧 Features
+
+- Simulates multiple devices using threads
+- Publishes JSON-formatted data (temp, humidity)
+- Subscribes to command topics (e.g. `device001/commands`)
+- Built with Python and paho-mqtt
+- Tested with HiveMQ Broker
+
+## 🧠 Architecture
+
+- MQTT Broker: HiveMQ Public Cloud
+- Client: Python (paho-mqtt)
+- Topics: `deviceID/data` and `deviceID/commands`
+
+## 🖼️ Preview
+
+![Preview](images/dashboard_preview.png)
+
+## 🔃 How to Run
+
+```bash
+pip install paho-mqtt
+python main.py
