@@ -1,57 +1,70 @@
-import json
-import time
-import random
-import pandas as pd
-from sklearn.ensemble import IsolationForest
-import paho.mqtt.client as mqtt
+# 📦 Import required libraries
+import json                    # For encoding sensor data into JSON format
+import time                    # To add delay between simulated data points
+import random                  # To generate random temperature values
+import pandas as pd            # For handling data in tabular format
+from sklearn.ensemble import IsolationForest  # AI model for anomaly detection
+import paho.mqtt.client as mqtt              # MQTT protocol library for publish/subscribe
 
-# MQTT Configuration
-BROKER = "broker.hivemq.com"
-PORT = 8883
-USERNAME = "AIANOMLY"
-PASSWORD = "12345678"
-TOPIC_PUB = "iot/simulator/data"
-TOPIC_SUB = "iot/simulator/response"
+# 🔧 MQTT Configuration
+BROKER = "broker.hivemq.com"     # Public MQTT broker
+PORT = 8883                      # Secure MQTT over TLS (use 1883 if not using TLS)
+USERNAME = "AIANOMLY"            # MQTT username (custom, optional on public brokers)
+PASSWORD = "12345678"            # MQTT password (not enforced on HiveMQ public)
+TOPIC_PUB = "iot/simulator/data"         # Topic to publish sensor data
+TOPIC_SUB = "iot/simulator/response"     # Topic to listen for anomaly alerts
 
-# Training data (normal temperature range)
+# 🧠 Step 1: Train Isolation Forest Model with Normal Data
+# This data simulates normal temperature readings
 training_data = pd.DataFrame({'temp': [24.8, 25.1, 24.9, 25.3, 25.0, 25.2, 24.7, 25.4]})
-model = IsolationForest(contamination=0.1)
-model.fit(training_data[['temp']])
 
-# Callback when subscribed
+# Train the model to identify what "normal" looks like
+model = IsolationForest(contamination=0.1)  # 10% of data is considered anomalies
+model.fit(training_data[['temp']])          # Train the model on temperature column
+
+# 🔄 MQTT Callback: Runs when connected to broker
 def on_connect(client, userdata, flags, rc):
     print("Connected with result code", rc)
-    client.subscribe(TOPIC_SUB)
+    client.subscribe(TOPIC_SUB)  # Subscribe to alert/response topic after connecting
 
-# Callback when response message is received
+# 📩 MQTT Callback: Runs when a message is received on subscribed topic
 def on_message(client, userdata, msg):
-    print("⚠️ ALERT:", msg.payload.decode())
+    print("⚠️ ALERT:", msg.payload.decode())  # Print the alert message
 
-# Setup client
-client = mqtt.Client()
-client.username_pw_set(USERNAME, PASSWORD)
-client.tls_set()  # for secure connection
-client.on_connect = on_connect
-client.on_message = on_message
-client.connect(BROKER, PORT)
-client.loop_start()
+# ⚙️ Setup MQTT Client
+client = mqtt.Client()  # Create a new MQTT client instance
+client.username_pw_set(USERNAME, PASSWORD)  # Set username & password
+client.tls_set()  # Enable TLS for secure communication
+client.on_connect = on_connect  # Attach on_connect callback
+client.on_message = on_message  # Attach on_message callback
+client.connect(BROKER, PORT)  # Connect to MQTT broker
+client.loop_start()  # Start listening in background thread
 
-# Simulate data
+# 🔁 Continuous Simulation Loop
 while True:
-    simulated_temp = round(random.uniform(24.0, 100.0), 2)  # sometimes injects anomaly
+    # Simulate a new temperature value (normal + possible anomalies)
+    simulated_temp = round(random.uniform(24.0, 100.0), 2)  # Injects anomaly occasionally
+
+    # Create a DataFrame with this new reading
     df = pd.DataFrame({'temp': [simulated_temp]})
+
+    # Use the trained model to predict if it's an anomaly (-1 = anomaly, 1 = normal)
     prediction = model.predict(df[['temp']])[0]
 
+    # Prepare data payload
     payload = {
         "temperature": simulated_temp,
-        "anomaly": bool(prediction == -1)
+        "anomaly": bool(prediction == -1)  # Convert to True/False
     }
 
+    # Publish the payload to the data topic
     client.publish(TOPIC_PUB, json.dumps(payload))
     print("📡 Sent:", payload)
 
+    # If it's an anomaly, publish an alert message to the response topic
     if payload["anomaly"]:
         alert_msg = f"🚨 Anomaly Detected: {simulated_temp}°C"
         client.publish(TOPIC_SUB, alert_msg)
 
+    # Wait before sending the next reading
     time.sleep(3)
